@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     # ── Alerting ─────────────────────────────────────────────────────────
     slack_webhook_url: Optional[str] = None
     alert_email: Optional[str] = None
-    alert_email_smtp_host: str = "smtp.gmail.com"
+    alert_email_smtp_host: str = ""
     alert_email_smtp_port: int = 587
     alert_email_from: str = "alerts@example.com"
     alert_email_password: str = ""
@@ -67,14 +67,14 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_user: str = "datawatch"
-    postgres_password: str = "changeme"
+    postgres_password: str = ""
     postgres_db: str = "datawatch"
 
     # ── MySQL Connector ──────────────────────────────────────────────────
     mysql_host: str = "localhost"
     mysql_port: int = 3306
     mysql_user: str = "datawatch"
-    mysql_password: str = "changeme"
+    mysql_password: str = ""
     mysql_db: str = "datawatch"
 
     # ── AWS / S3 ─────────────────────────────────────────────────────────

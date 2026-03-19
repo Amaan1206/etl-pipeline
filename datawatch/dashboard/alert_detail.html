@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>datawatch Alert Detail</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="min-h-screen">
+    <nav class="dw-navbar sticky top-0 z-20">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+            <a href="/" class="dw-brand text-xl">datawatch</a>
+            <div class="flex items-center gap-5 text-sm font-medium">
+                <a href="/" class="dw-nav-link">Dashboard</a>
+                <a href="/alerts" class="dw-nav-link active">Alerts</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        <header class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <a id="back-to-alerts" href="/alerts" class="inline-flex w-fit items-center gap-2 rounded-md border border-slate-600 px-3 py-2 text-sm font-medium text-slate-200 hover:border-blue-500 hover:text-white">
+                <span aria-hidden="true">&lt;-</span>
+                Back to alerts
+            </a>
+            <p class="text-xs text-slate-400">Auto-refresh: every 30 seconds | Last updated: <span id="detail-last-updated">--</span></p>
+        </header>
+
+        <div id="detail-error" class="empty-state hidden">Alert not found.</div>
+
+        <section id="detail-content" class="space-y-5">
+            <article class="dw-card p-5">
+                <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h1 class="text-2xl font-semibold text-slate-100">Alert Detail</h1>
+                        <p class="text-sm text-slate-400">Review context and acknowledge this alert when triaged.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="detail-severity-badge" class="severity-badge severity-large severity-neutral">UNKNOWN</span>
+                        <span id="detail-ack-status" class="text-sm text-slate-300">Pending</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <p class="meta-label">Alert ID</p>
+                        <p id="detail-id" class="meta-value"></p>
+                    </div>
+                    <div>
+                        <p class="meta-label">Timestamp</p>
+                        <p id="detail-time" class="meta-value"></p>
+                    </div>
+                    <div>
+                        <p class="meta-label">Pipeline</p>
+                        <p id="detail-pipeline" class="meta-value"></p>
+                    </div>
+                    <div>
+                        <p class="meta-label">Column</p>
+                        <p id="detail-column" class="meta-value"></p>
+                    </div>
+                    <div>
+                        <p class="meta-label">Type</p>
+                        <p id="detail-type" class="meta-value"></p>
+                    </div>
+                    <div>
+                        <p class="meta-label">Score</p>
+                        <p id="detail-score" class="meta-value"></p>
+                    </div>
+                </div>
+
+                <div class="mt-4">
+                    <p class="meta-label">Details</p>
+                    <p id="detail-details" class="meta-value mt-1 text-slate-100"></p>
+                </div>
+            </article>
+
+            <article class="dw-card p-5">
+                <h2 class="mb-3 text-lg font-semibold text-slate-100">Acknowledge Alert</h2>
+                <label for="acknowledge-notes" class="meta-label block">Notes</label>
+                <textarea id="acknowledge-notes" rows="4" class="mt-2 w-full rounded-md border border-slate-600 bg-slate-950 p-3 text-sm text-slate-100 outline-none focus:border-blue-500"></textarea>
+                <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <button id="acknowledge-btn" type="button" class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-slate-600">Acknowledge</button>
+                    <p id="acknowledge-message" class="text-sm text-slate-300"></p>
+                </div>
+            </article>
+
+            <article id="distribution-chart-card" class="dw-card hidden p-5">
+                <h2 class="mb-3 text-lg font-semibold text-slate-100">Distribution Comparison</h2>
+                <p class="mb-4 text-sm text-slate-400">Baseline vs current batch histogram.</p>
+                <canvas id="distribution-chart" height="120"></canvas>
+            </article>
+        </section>
+    </main>
+
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/alerts.js"></script>
+</body>
+</html>

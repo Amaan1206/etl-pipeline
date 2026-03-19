@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>datawatch Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="min-h-screen">
+    <nav class="dw-navbar sticky top-0 z-20">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+            <a href="/" class="dw-brand text-xl">datawatch</a>
+            <div class="flex items-center gap-5 text-sm font-medium">
+                <a href="/" class="dw-nav-link active">Dashboard</a>
+                <a href="/alerts" class="dw-nav-link">Alerts</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h1 class="text-2xl font-semibold text-slate-100">Operations Dashboard</h1>
+                <p class="text-sm text-slate-400">Live data quality overview across active pipelines.</p>
+            </div>
+            <p class="text-xs text-slate-400">Auto-refresh: every 30 seconds | Last updated: <span id="last-updated">--</span></p>
+        </header>
+
+        <section class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="dw-card p-4">
+                <p class="dw-card-title">Total Alerts</p>
+                <p id="stat-total" class="dw-card-value mt-2">0</p>
+            </article>
+            <article class="dw-card p-4">
+                <p class="dw-card-title">Critical</p>
+                <p id="stat-critical" class="dw-card-value mt-2">0</p>
+            </article>
+            <article class="dw-card p-4">
+                <p class="dw-card-title">Warning</p>
+                <p id="stat-warning" class="dw-card-value mt-2">0</p>
+            </article>
+            <article class="dw-card p-4">
+                <p class="dw-card-title">Last 24h</p>
+                <p id="stat-last24h" class="dw-card-value mt-2">0</p>
+            </article>
+        </section>
+
+        <section class="dw-card mb-6 p-4">
+            <div class="mb-4 flex items-center justify-between gap-2">
+                <h2 class="text-lg font-semibold text-slate-100">Recent Alerts</h2>
+                <span id="recent-alert-count" class="text-xs text-slate-400">0 alerts</span>
+            </div>
+
+            <div id="recent-alerts-empty" class="empty-state hidden">No alerts yet</div>
+
+            <div id="recent-alerts-table-wrap" class="dw-table-wrap overflow-x-auto">
+                <table class="dw-table min-w-full">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Pipeline</th>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Severity</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recent-alerts-body"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="dw-card p-4">
+            <div class="mb-4 flex items-center justify-between gap-2">
+                <h2 class="text-lg font-semibold text-slate-100">Pipeline Health</h2>
+                <span id="pipeline-count" class="text-xs text-slate-400">0 pipelines</span>
+            </div>
+
+            <div id="pipeline-health-empty" class="empty-state hidden">No monitored pipelines found.</div>
+            <div id="pipeline-health-grid" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </section>
+    </main>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

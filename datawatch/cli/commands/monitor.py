@@ -343,13 +343,13 @@ def _sleep_interval(seconds: int) -> None:
 
 
 def monitor_command(
-    pipeline: str = typer.Option(
-        ...,
+    pipeline: Optional[str] = typer.Option(
+        None,
         "--pipeline",
         help="Pipeline name previously configured with 'datawatch connect'.",
     ),
-    table: str = typer.Option(
-        ...,
+    table: Optional[str] = typer.Option(
+        None,
         "--table",
         help="Table name, SQL query target, or file path to monitor.",
     ),
@@ -374,8 +374,28 @@ def monitor_command(
         "--alert-email",
         help="Optional recipient email for alert notifications.",
     ),
+    demo: bool = typer.Option(
+        False,
+        "--demo",
+        help="Run synthetic demo mode and ignore other monitor options.",
+    ),
+    rolling: bool = typer.Option(
+        False,
+        "--rolling",
+        help="Update baseline after each successful check using rolling merge.",
+    ),
 ) -> None:
     """Run continuous monitoring for a configured pipeline."""
+    if demo:
+        from datawatch.cli.demo import run_demo
+
+        run_demo()
+        return
+
+    if pipeline is None or table is None:
+        print_error("Error: --pipeline and --table are required unless using --demo flag")
+        raise typer.Exit(code=1)
+
     db: Optional[Database] = None
     connector = None
     dashboard_server: Optional[_DashboardServer] = None
@@ -512,6 +532,16 @@ def monitor_command(
                     )
             else:
                 print_success("No alerts fired.")
+
+            if rolling:
+                try:
+                    baseline_repo.update_rolling(
+                        pipeline_name=pipeline,
+                        new_df=current_df,
+                    )
+                    print_success("Baseline updated (rolling window)")
+                except Exception as exc:
+                    print_warning("Rolling baseline update failed: {0}".format(exc))
 
             _update_last_run(db, monitor_id)
             _sleep_interval(interval_seconds)

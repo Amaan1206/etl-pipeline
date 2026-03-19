@@ -76,6 +76,12 @@
                 </div>
             </article>
 
+            <article id="distribution-analysis-card" class="dw-card hidden p-5">
+                <h2 class="mb-3 text-lg font-semibold text-slate-100">Distribution Analysis</h2>
+                <p id="distribution-analysis-empty" class="text-sm text-slate-400 hidden">Distribution data not available for this alert</p>
+                <canvas id="distribution-analysis-chart" class="hidden" height="120"></canvas>
+            </article>
+
             <article class="dw-card p-5">
                 <h2 class="mb-3 text-lg font-semibold text-slate-100">Acknowledge Alert</h2>
                 <label for="acknowledge-notes" class="meta-label block">Notes</label>
@@ -96,5 +102,100 @@
 
     <script src="/static/js/charts.js"></script>
     <script src="/static/js/alerts.js"></script>
+    <script>
+        (function () {
+            var REFRESH_INTERVAL_MS = 30000;
+            var refreshTimer = null;
+
+            function fetchJson(url) {
+                return fetch(url, {
+                    headers: {
+                        "Accept": "application/json"
+                    }
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Request failed for " + url + " (" + response.status + ")");
+                    }
+                    return response.json();
+                });
+            }
+
+            function resolveAlertIdFromUrl() {
+                var params = new URLSearchParams(window.location.search);
+                var fromQuery = params.get("id");
+                if (fromQuery) {
+                    return fromQuery;
+                }
+
+                var pathParts = window.location.pathname.split("/").filter(function (part) {
+                    return part.length > 0;
+                });
+                if (pathParts.length >= 2 && pathParts[0] === "alerts") {
+                    return decodeURIComponent(pathParts[1]);
+                }
+                return "";
+            }
+
+            function loadDistributionAnalysis() {
+                var card = document.getElementById("distribution-analysis-card");
+                var empty = document.getElementById("distribution-analysis-empty");
+                var canvas = document.getElementById("distribution-analysis-chart");
+                var alertId = resolveAlertIdFromUrl();
+
+                if (!card || !empty || !canvas || !alertId) {
+                    return;
+                }
+
+                Promise.all([
+                    fetchJson("/api/alerts/" + encodeURIComponent(alertId)),
+                    fetchJson("/api/alerts/" + encodeURIComponent(alertId) + "/distribution")
+                ]).then(function (results) {
+                    var alert = results[0];
+                    var distribution = results[1];
+
+                    if (alert.alert_type !== "DISTRIBUTION_SHIFT") {
+                        card.classList.add("hidden");
+                        return;
+                    }
+
+                    card.classList.remove("hidden");
+
+                    if (!distribution || !distribution.has_data) {
+                        empty.classList.remove("hidden");
+                        canvas.classList.add("hidden");
+                        return;
+                    }
+
+                    empty.classList.add("hidden");
+                    canvas.classList.remove("hidden");
+                    canvas.setAttribute(
+                        "data-chart-title",
+                        "Distribution Shift — " + (distribution.column || alert.column_name || "column")
+                    );
+
+                    if (typeof window.renderDistributionChart === "function") {
+                        window.renderDistributionChart(
+                            "distribution-analysis-chart",
+                            distribution.baseline,
+                            alert.score
+                        );
+                    }
+                }).catch(function () {
+                    card.classList.add("hidden");
+                });
+            }
+
+            document.addEventListener("DOMContentLoaded", function () {
+                loadDistributionAnalysis();
+                refreshTimer = window.setInterval(loadDistributionAnalysis, REFRESH_INTERVAL_MS);
+            });
+
+            window.addEventListener("beforeunload", function () {
+                if (refreshTimer) {
+                    window.clearInterval(refreshTimer);
+                }
+            });
+        })();
+    </script>
 </body>
 </html>

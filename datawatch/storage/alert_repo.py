@@ -80,13 +80,15 @@ class AlertRepository:
         except Exception as exc:
             logger.error("Failed to save alert %s: %s", alert.id, exc)
 
-    def get_all(self, limit: int = 100) -> List[Alert]:
+    def get_all(self, limit: int = 100, pipeline_name: Optional[str] = None) -> List[Alert]:
         """Return the most recent alerts, newest first.
 
         Parameters
         ----------
         limit:
             Maximum number of alerts to return.
+        pipeline_name:
+            Optional pipeline filter.
 
         Returns
         -------
@@ -94,10 +96,17 @@ class AlertRepository:
         """
         try:
             with self._db.get_connection() as conn:
-                rows = conn.execute(
-                    "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?",
-                    (limit,),
-                ).fetchall()
+                if pipeline_name:
+                    rows = conn.execute(
+                        "SELECT * FROM alerts WHERE pipeline_name = ? "
+                        "ORDER BY timestamp DESC LIMIT ?",
+                        (pipeline_name, limit),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?",
+                        (limit,),
+                    ).fetchall()
             return [self._row_to_alert(r) for r in rows]
         except Exception as exc:
             logger.error("Failed to fetch alerts: %s", exc)
@@ -184,7 +193,7 @@ class AlertRepository:
             logger.error("Failed to acknowledge alert %s: %s", alert_id, exc)
             return False
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self, pipeline_name: Optional[str] = None) -> Dict[str, int]:
         """Return aggregate alert statistics.
 
         Returns
@@ -202,26 +211,54 @@ class AlertRepository:
 
         try:
             with self._db.get_connection() as conn:
-                row = conn.execute("SELECT COUNT(*) AS cnt FROM alerts").fetchone()
-                stats["total"] = row["cnt"]
+                if pipeline_name:
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts WHERE pipeline_name = ?",
+                        (pipeline_name,),
+                    ).fetchone()
+                    stats["total"] = row["cnt"]
 
-                row = conn.execute(
-                    "SELECT COUNT(*) AS cnt FROM alerts WHERE severity = ?",
-                    ("CRITICAL",),
-                ).fetchone()
-                stats["critical"] = row["cnt"]
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts "
+                        "WHERE pipeline_name = ? AND severity = ?",
+                        (pipeline_name, "CRITICAL"),
+                    ).fetchone()
+                    stats["critical"] = row["cnt"]
 
-                row = conn.execute(
-                    "SELECT COUNT(*) AS cnt FROM alerts WHERE severity = ?",
-                    ("WARNING",),
-                ).fetchone()
-                stats["warning"] = row["cnt"]
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts "
+                        "WHERE pipeline_name = ? AND severity = ?",
+                        (pipeline_name, "WARNING"),
+                    ).fetchone()
+                    stats["warning"] = row["cnt"]
 
-                row = conn.execute(
-                    "SELECT COUNT(*) AS cnt FROM alerts WHERE timestamp >= ?",
-                    (cutoff,),
-                ).fetchone()
-                stats["last_24h"] = row["cnt"]
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts "
+                        "WHERE pipeline_name = ? AND timestamp >= ?",
+                        (pipeline_name, cutoff),
+                    ).fetchone()
+                    stats["last_24h"] = row["cnt"]
+                else:
+                    row = conn.execute("SELECT COUNT(*) AS cnt FROM alerts").fetchone()
+                    stats["total"] = row["cnt"]
+
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts WHERE severity = ?",
+                        ("CRITICAL",),
+                    ).fetchone()
+                    stats["critical"] = row["cnt"]
+
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts WHERE severity = ?",
+                        ("WARNING",),
+                    ).fetchone()
+                    stats["warning"] = row["cnt"]
+
+                    row = conn.execute(
+                        "SELECT COUNT(*) AS cnt FROM alerts WHERE timestamp >= ?",
+                        (cutoff,),
+                    ).fetchone()
+                    stats["last_24h"] = row["cnt"]
 
             return stats
         except Exception as exc:

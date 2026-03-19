@@ -52,6 +52,16 @@
                 <span id="recent-alert-count" class="text-xs text-slate-400">0 alerts</span>
             </div>
 
+            <div class="mb-4 flex items-center gap-3">
+                <label for="pipeline-filter" class="text-xs font-semibold uppercase tracking-wide text-slate-400">Pipeline</label>
+                <select
+                    id="pipeline-filter"
+                    class="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-blue-500"
+                >
+                    <option value="">All Pipelines</option>
+                </select>
+            </div>
+
             <div id="recent-alerts-empty" class="empty-state hidden">No alerts yet</div>
 
             <div id="recent-alerts-table-wrap" class="dw-table-wrap overflow-x-auto">

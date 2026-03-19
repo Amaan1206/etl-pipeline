@@ -189,3 +189,98 @@ class BaselineRepository:
             logger.debug("Baseline deleted for pipeline '%s'.", pipeline_name)
         except Exception as exc:
             logger.error("Failed to delete baseline for '%s': %s", pipeline_name, exc)
+
+    def update_rolling(
+        self,
+        pipeline_name: str,
+        new_df: pd.DataFrame,
+        window_days: int = 7,
+    ) -> None:
+        """Update stored baseline stats with a weighted rolling merge.
+
+        If no baseline exists yet, this behaves exactly like :meth:`save`.
+        Existing baseline values are weighted at ``0.7`` and new batch values
+        at ``0.3`` for numeric ``mean``/``std`` and ``null_rate``.
+        """
+        _ = window_days
+
+        existing_stats = self.get(pipeline_name)
+        if not existing_stats:
+            self.save(pipeline_name=pipeline_name, df=new_df)
+            return
+
+        incoming_stats: Dict[str, Dict[str, Any]] = {}
+        for col in new_df.columns:
+            incoming_stats[str(col)] = _compute_column_stats(new_df[col])
+
+        merged_stats: Dict[str, Dict[str, Any]] = {
+            key: dict(value) for key, value in existing_stats.items()
+        }
+
+        for column_name, current in incoming_stats.items():
+            previous = existing_stats.get(column_name)
+            if previous is None:
+                merged_stats[column_name] = dict(current)
+                continue
+
+            previous_dtype = str(previous.get("dtype", ""))
+            current_dtype = str(current.get("dtype", ""))
+
+            if previous_dtype != current_dtype:
+                merged_stats[column_name] = dict(current)
+                continue
+
+            merged = dict(previous)
+            merged["dtype"] = previous_dtype
+
+            try:
+                previous_null_rate = float(previous.get("null_rate", 0.0) or 0.0)
+            except Exception:
+                previous_null_rate = 0.0
+            try:
+                current_null_rate = float(current.get("null_rate", 0.0) or 0.0)
+            except Exception:
+                current_null_rate = 0.0
+
+            merged_null_rate = (previous_null_rate * 0.7) + (current_null_rate * 0.3)
+            merged["null_rate"] = round(float(merged_null_rate), 6)
+
+            if pd.api.types.is_numeric_dtype(new_df[column_name]):
+                previous_mean = previous.get("mean")
+                current_mean = current.get("mean")
+                if previous_mean is not None and current_mean is not None:
+                    merged["mean"] = round((float(previous_mean) * 0.7) + (float(current_mean) * 0.3), 6)
+                elif current_mean is not None:
+                    merged["mean"] = float(current_mean)
+
+                previous_std = previous.get("std")
+                current_std = current.get("std")
+                if previous_std is not None and current_std is not None:
+                    merged["std"] = round((float(previous_std) * 0.7) + (float(current_std) * 0.3), 6)
+                elif current_std is not None:
+                    merged["std"] = float(current_std)
+
+            merged_stats[column_name] = merged
+
+        try:
+            self.delete(pipeline_name)
+            with self._db.get_connection() as conn:
+                for col_name in sorted(merged_stats.keys()):
+                    conn.execute(
+                        "INSERT INTO baselines (id, pipeline_id, column_name, stats_json) "
+                        "VALUES (?, ?, ?, ?)",
+                        (
+                            str(uuid.uuid4()),
+                            pipeline_name,
+                            str(col_name),
+                            json.dumps(merged_stats[col_name]),
+                        ),
+                    )
+                conn.commit()
+            logger.info(
+                "Rolling baseline updated for pipeline '%s' (%d columns).",
+                pipeline_name,
+                len(merged_stats),
+            )
+        except Exception as exc:
+            logger.error("Failed to update rolling baseline for '%s': %s", pipeline_name, exc)

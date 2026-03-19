@@ -3,62 +3,17 @@
 (function () {
     var chartRegistry = {};
 
-    function toNumberArray(input) {
-        if (!Array.isArray(input)) {
-            return [];
-        }
-
-        return input
-            .map(function (value) {
-                if (typeof value === "number") {
-                    return value;
-                }
-                if (value && typeof value === "object" && typeof value.value === "number") {
-                    return value.value;
-                }
-                var numeric = Number(value);
-                return isFinite(numeric) ? numeric : null;
-            })
-            .filter(function (value) {
-                return value !== null;
-            });
+    function toNumber(value, fallback) {
+        var numeric = Number(value);
+        return isFinite(numeric) ? numeric : fallback;
     }
 
-    function histogram(values, binEdges) {
-        var counts = new Array(binEdges.length - 1).fill(0);
-
-        values.forEach(function (value) {
-            for (var i = 0; i < binEdges.length - 1; i += 1) {
-                var left = binEdges[i];
-                var right = binEdges[i + 1];
-                var isLastBin = i === binEdges.length - 2;
-
-                if ((value >= left && value < right) || (isLastBin && value === right)) {
-                    counts[i] += 1;
-                    break;
-                }
-            }
-        });
-
-        return counts;
+    function gaussianDensity(x, mean, std) {
+        var z = (x - mean) / std;
+        return Math.exp(-0.5 * z * z);
     }
 
-    function buildBinEdges(minValue, maxValue, bins) {
-        var edges = [];
-        var width = (maxValue - minValue) / bins;
-
-        for (var i = 0; i <= bins; i += 1) {
-            edges.push(minValue + (width * i));
-        }
-
-        return edges;
-    }
-
-    function formatLabel(value) {
-        return Number(value).toFixed(2);
-    }
-
-    function renderDistributionChart(canvasId, baselineData, currentData) {
+    function renderDistributionChart(canvasId, baseline, alertScore) {
         if (typeof Chart === "undefined") {
             console.error("Chart.js is not loaded.");
             return null;
@@ -70,59 +25,67 @@
             return null;
         }
 
-        var baselineValues = toNumberArray(baselineData);
-        var currentValues = toNumberArray(currentData);
+        var mean = toNumber(baseline && baseline.mean, null);
+        var std = Math.abs(toNumber(baseline && baseline.std, 0));
+        var minValue = toNumber(baseline && baseline.min, null);
+        var maxValue = toNumber(baseline && baseline.max, null);
 
-        if (!baselineValues.length || !currentValues.length) {
-            console.warn("Distribution chart skipped: missing baseline/current data.");
+        if (mean === null || minValue === null || maxValue === null) {
+            console.warn("Distribution chart skipped: invalid baseline input.");
             return null;
         }
 
-        var allValues = baselineValues.concat(currentValues);
-        var minValue = Math.min.apply(null, allValues);
-        var maxValue = Math.max.apply(null, allValues);
-
-        if (minValue === maxValue) {
-            maxValue = minValue + 1;
+        if (!isFinite(std) || std <= 0) {
+            std = Math.max(Math.abs(maxValue - minValue) / 6, 1);
         }
 
-        var bins = 12;
-        var edges = buildBinEdges(minValue, maxValue, bins);
+        var chartMin = mean - (3 * std);
+        var chartMax = mean + (3 * std);
+        var bins = 20;
+        var step = (chartMax - chartMin) / bins;
         var labels = [];
+        var baselineCurve = [];
+        var currentCurve = [];
+        var shift = toNumber(alertScore, 0) * 0.1;
+        var shiftedMean = mean + shift;
 
-        for (var i = 0; i < edges.length - 1; i += 1) {
-            labels.push(formatLabel(edges[i]) + " - " + formatLabel(edges[i + 1]));
+        for (var i = 0; i < bins; i += 1) {
+            var x = chartMin + (step * (i + 0.5));
+            labels.push(x.toFixed(2));
+            baselineCurve.push(gaussianDensity(x, mean, std));
+            currentCurve.push(gaussianDensity(x, shiftedMean, std));
         }
-
-        var baselineCounts = histogram(baselineValues, edges);
-        var currentCounts = histogram(currentValues, edges);
 
         if (chartRegistry[canvasId]) {
             chartRegistry[canvasId].destroy();
         }
 
+        var chartTitle = canvas.getAttribute("data-chart-title") || "Distribution Shift";
+
         var chart = new Chart(canvas.getContext("2d"), {
-            type: "bar",
+            type: "line",
             data: {
                 labels: labels,
                 datasets: [
                     {
                         label: "Baseline",
-                        data: baselineCounts,
-                        backgroundColor: "rgba(59, 130, 246, 0.5)",
+                        data: baselineCurve,
+                        backgroundColor: "rgba(59, 130, 246, 0.6)",
                         borderColor: "rgba(59, 130, 246, 1)",
-                        borderWidth: 1,
-                        grouped: false,
-                        barThickness: 18
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.35,
+                        fill: true
                     },
                     {
-                        label: "Current",
-                        data: currentCounts,
-                        backgroundColor: "rgba(239, 68, 68, 0.5)",
+                        label: "Current Batch (shifted)",
+                        data: currentCurve,
+                        backgroundColor: "rgba(239, 68, 68, 0.6)",
                         borderColor: "rgba(239, 68, 68, 1)",
-                        borderWidth: 1,
-                        grouped: false,
-                        barThickness: 12
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.35,
+                        fill: true
                     }
                 ]
             },
@@ -134,6 +97,15 @@
                     intersect: false
                 },
                 plugins: {
+                    title: {
+                        display: true,
+                        text: chartTitle,
+                        color: "#e2e8f0",
+                        font: {
+                            size: 14,
+                            weight: "600"
+                        }
+                    },
                     legend: {
                         labels: {
                             color: "#e2e8f0"
@@ -142,19 +114,24 @@
                     tooltip: {
                         callbacks: {
                             label: function (context) {
-                                return context.dataset.label + ": " + context.parsed.y;
+                                return context.dataset.label + ": " + context.parsed.y.toFixed(4);
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
+                        title: {
+                            display: true,
+                            text: "Value range",
+                            color: "#94a3b8"
+                        },
                         ticks: {
                             color: "#94a3b8",
-                            maxRotation: 60,
-                            minRotation: 60,
+                            maxRotation: 0,
+                            minRotation: 0,
                             autoSkip: true,
-                            maxTicksLimit: 8
+                            maxTicksLimit: 10
                         },
                         grid: {
                             color: "rgba(148, 163, 184, 0.12)"
@@ -162,8 +139,13 @@
                     },
                     y: {
                         beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: "Probability density",
+                            color: "#94a3b8"
+                        },
                         ticks: {
-                            precision: 0,
+                            precision: 4,
                             color: "#94a3b8"
                         },
                         grid: {

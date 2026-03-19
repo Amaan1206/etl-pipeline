@@ -1,13 +1,14 @@
 """Alert API routes for listing, reading, stats, and acknowledgement."""
 
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from datawatch.alerts.alert import Alert
 from datawatch.storage.alert_repo import AlertRepository
+from datawatch.storage.baseline_repo import BaselineRepository
 from datawatch.storage.database import Database
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
@@ -52,6 +53,23 @@ class AlertStatsResponse(BaseModel):
     last_24h: int
 
 
+class AlertDistributionBaselineResponse(BaseModel):
+    """Baseline distribution summary for a numeric column."""
+
+    mean: float
+    std: float
+    min: float
+    max: float
+
+
+class AlertDistributionResponse(BaseModel):
+    """Distribution payload used for alert-detail chart rendering."""
+
+    column: Optional[str] = None
+    baseline: Optional[AlertDistributionBaselineResponse] = None
+    has_data: bool
+
+
 def _resolve_db(request: Request) -> Database:
     """Return app-scoped database instance, creating one if missing."""
     db = getattr(request.app.state, "db", None)
@@ -86,18 +104,64 @@ def _to_alert_response(alert: Alert) -> AlertResponse:
 async def list_alerts(
     request: Request,
     limit: int = Query(default=50, ge=1, le=500),
+    pipeline: Optional[str] = Query(default=None),
 ) -> List[AlertResponse]:
     """Return recent alerts ordered from newest to oldest."""
     repo = _resolve_repo(request)
-    alerts = repo.get_all(limit=limit)
+    alerts = repo.get_all(limit=limit, pipeline_name=pipeline)
     return [_to_alert_response(alert) for alert in alerts]
 
 
 @router.get("/stats", response_model=AlertStatsResponse)
-async def get_alert_stats(request: Request) -> AlertStatsResponse:
+async def get_alert_stats(
+    request: Request,
+    pipeline: Optional[str] = Query(default=None),
+) -> AlertStatsResponse:
     """Return aggregate statistics for all alerts."""
     repo = _resolve_repo(request)
-    return AlertStatsResponse(**repo.get_stats())
+    return AlertStatsResponse(**repo.get_stats(pipeline_name=pipeline))
+
+
+@router.get(
+    "/{alert_id}/distribution",
+    response_model=AlertDistributionResponse,
+    response_model_exclude_none=True,
+)
+async def get_alert_distribution(alert_id: str, request: Request) -> AlertDistributionResponse:
+    """Return baseline distribution inputs for charting a specific alert column."""
+    repo = _resolve_repo(request)
+    alert = repo.get_by_id(alert_id)
+    if alert is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    column_name = str(alert.column_name or "")
+    if not column_name:
+        return AlertDistributionResponse(has_data=False)
+
+    baseline_repo = BaselineRepository(_resolve_db(request))
+    baseline_stats = baseline_repo.get(alert.pipeline_name)
+    column_stats = baseline_stats.get(column_name)
+    if not column_stats:
+        return AlertDistributionResponse(has_data=False)
+
+    try:
+        mean = float(column_stats["mean"])
+        std = float(column_stats["std"])
+        min_value = float(column_stats["min"])
+        max_value = float(column_stats["max"])
+    except Exception:
+        return AlertDistributionResponse(has_data=False)
+
+    return AlertDistributionResponse(
+        column=column_name,
+        baseline=AlertDistributionBaselineResponse(
+            mean=mean,
+            std=std,
+            min=min_value,
+            max=max_value,
+        ),
+        has_data=True,
+    )
 
 
 @router.get("/{alert_id}", response_model=AlertResponse)

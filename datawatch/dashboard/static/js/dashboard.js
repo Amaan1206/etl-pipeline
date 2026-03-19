@@ -3,8 +3,10 @@
 (function () {
     var REFRESH_INTERVAL_MS = 30000;
     var knownAlertIds = new Set();
+    var knownPipelines = new Set();
     var hasRenderedOnce = false;
     var refreshTimer = null;
+    var currentPipeline = null;
 
     function fetchJson(url) {
         return fetch(url, {
@@ -65,11 +67,55 @@
         target.textContent = new Date().toLocaleTimeString();
     }
 
+    function buildApiUrl(basePath, params) {
+        var query = [];
+        Object.keys(params).forEach(function (key) {
+            var value = params[key];
+            if (value === null || value === undefined || value === "") {
+                return;
+            }
+            query.push(encodeURIComponent(key) + "=" + encodeURIComponent(String(value)));
+        });
+        if (!query.length) {
+            return basePath;
+        }
+        return basePath + "?" + query.join("&");
+    }
+
     function renderStats(stats) {
         document.getElementById("stat-total").textContent = String(stats.total || 0);
         document.getElementById("stat-critical").textContent = String(stats.critical || 0);
         document.getElementById("stat-warning").textContent = String(stats.warning || 0);
         document.getElementById("stat-last24h").textContent = String(stats.last_24h || 0);
+    }
+
+    function renderPipelineFilter(alerts) {
+        var select = document.getElementById("pipeline-filter");
+        if (!select) {
+            return;
+        }
+
+        alerts.forEach(function (alert) {
+            if (alert && alert.pipeline_name) {
+                knownPipelines.add(alert.pipeline_name);
+            }
+        });
+
+        if (currentPipeline) {
+            knownPipelines.add(currentPipeline);
+        }
+
+        var pipelines = Array.from(knownPipelines).sort();
+        var options = ["<option value=''>All Pipelines</option>"];
+
+        pipelines.forEach(function (pipelineName) {
+            options.push(
+                "<option value='" + escapeHtml(pipelineName) + "'>" + escapeHtml(pipelineName) + "</option>"
+            );
+        });
+
+        select.innerHTML = options.join("");
+        select.value = currentPipeline || "";
     }
 
     function alertDetailUrl(alertId) {
@@ -196,16 +242,39 @@
         grid.innerHTML = cards.join("");
     }
 
+    function fetchAlerts() {
+        return fetchJson(
+            buildApiUrl("/api/alerts", {
+                limit: 100,
+                pipeline: currentPipeline
+            })
+        );
+    }
+
+    function fetchStats() {
+        return fetchJson(
+            buildApiUrl("/api/alerts/stats", {
+                pipeline: currentPipeline
+            })
+        );
+    }
+
+    function filterByPipeline(name) {
+        currentPipeline = name || null;
+        refreshDashboard();
+    }
+
     function refreshDashboard() {
         return Promise.all([
-            fetchJson("/api/alerts/stats"),
-            fetchJson("/api/alerts?limit=100"),
+            fetchStats(),
+            fetchAlerts(),
             fetchJson("/api/monitors")
         ]).then(function (results) {
             var stats = results[0];
             var alerts = results[1];
             var monitors = results[2];
 
+            renderPipelineFilter(alerts);
             renderStats(stats);
             renderRecentAlerts(alerts);
             renderPipelineHealth(alerts, monitors);
@@ -216,6 +285,13 @@
     }
 
     document.addEventListener("DOMContentLoaded", function () {
+        var pipelineFilter = document.getElementById("pipeline-filter");
+        if (pipelineFilter) {
+            pipelineFilter.addEventListener("change", function (event) {
+                filterByPipeline(event.target.value || null);
+            });
+        }
+
         refreshDashboard();
         refreshTimer = window.setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
     });

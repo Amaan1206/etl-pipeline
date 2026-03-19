@@ -33,11 +33,28 @@ def list_alerts(
         max=1000,
         help="Maximum number of recent alerts to display.",
     ),
+    output_format: str = typer.Option(
+        "table",
+        "--format",
+        help="Output format: table or json.",
+    ),
 ) -> None:
     """List recent alerts stored in the Datawatch database."""
     try:
+        import json
+
+        normalized_format = str(output_format).strip().lower()
+        if normalized_format not in ("table", "json"):
+            print_error("Invalid format '{0}'. Choose 'table' or 'json'.".format(output_format))
+            raise typer.Exit(code=1)
+
         repo = AlertRepository(Database())
         alerts = repo.get_all(limit=limit)
+
+        if normalized_format == "json":
+            payload = [alert.to_dict() for alert in alerts]
+            typer.echo(json.dumps(payload, indent=2))
+            return
 
         if not alerts:
             print_warning("No alerts found.")

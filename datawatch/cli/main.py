@@ -6,6 +6,7 @@ import typer
 
 from datawatch import __version__
 from datawatch.cli.commands import alerts_app, connect_command, monitor_command, status_command
+from datawatch.cli.commands.report import report_command
 from datawatch.cli.output import print_banner
 
 app = typer.Typer(
@@ -46,6 +47,7 @@ def main(
 app.command("connect", help="Connect to a data source and register a pipeline.")(connect_command)
 app.command("monitor", help="Run continuous monitoring for a configured pipeline.")(monitor_command)
 app.command("status", help="Show configured pipeline status and alert totals.")(status_command)
+app.command("report", help="Generate a markdown report from alert history.")(report_command)
 app.add_typer(alerts_app, name="alerts", help="List, inspect, and clear alerts.")
 
 

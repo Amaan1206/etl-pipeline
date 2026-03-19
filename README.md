@@ -1,4 +1,5 @@
 # datawatch
+![Tests](https://github.com/Amaan1206/etl-pipeline/actions/workflows/tests.yml/badge.svg) ![Coverage](https://codecov.io/gh/Amaan1206/etl-pipeline/branch/main/graph/badge.svg) ![Python](https://img.shields.io/badge/python-3.9+-blue.svg)
 
 Automated data quality monitoring for ETL pipelines
 
